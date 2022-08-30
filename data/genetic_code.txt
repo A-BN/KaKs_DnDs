@@ -63,17 +63,3 @@ TTA	Leu
 TTC	Phe
 TTG	Leu
 TTT	Phe
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
