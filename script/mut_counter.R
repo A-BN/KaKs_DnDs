@@ -16,7 +16,6 @@ mut_counter <- function(full_orf_aln,
 
   # creating empty output table
   mut_table <- genetic_code
-  mut_table$AA <- NULL
   mut_table$s <- 0
   mut_table$n <- 0
   
@@ -32,7 +31,7 @@ mut_counter <- function(full_orf_aln,
   message("Analyzing the following sequences")
   while(to_skip < (n_lines - 1)) {
   to_skip <- to_skip + 2
-  # cat('lines to skip:', to_skip, '\n')
+  cat('- sequence number:', to_skip %/% 2, '\n')
   curr_seq <- 
     read_codons(file = full_orf_aln, n = 1, skip = to_skip)
   # finding mismatches positions
@@ -51,11 +50,15 @@ mut_counter <- function(full_orf_aln,
     mut_table$s[mut_table$codon == curr_mut$ref[1]] <- 
       mut_table$s[mut_table$codon == curr_mut$ref[1]] + curr_mut$s[1]   
     mut_table$n[mut_table$codon == curr_mut$ref[1]] <- 
-      mut_table$n[mut_table$codon == curr_mut$ref[1]] + curr_mut$n[1]              
+     mut_table$n[mut_table$codon == curr_mut$ref[1]] + curr_mut$n[1]              
   }
 }
   mut_table <- merge(ref_count, mut_table, by = 'codon')
-  return(mut_table)
+  full_output <- compute_kaKs(mutation_table = mut_table)
+  order_wanted <- c('codon', 'AA','count', 'S', 'N', 's', 'n', 'sS', 'nN')
+  full_output[[1]] <- full_output[[1]][ , order_wanted]
+  cat('Ka/Ks is', round(full_output[[2]], 3),'\n')
+  return(full_output)
 }
 
 
@@ -138,20 +141,41 @@ syn_or_nonsyn <-
     
     
     if (out_aa[1] == out_aa[2]) {
-      result <- list(ref = codon_ref, mut = codon_mut, s = 1, n = 0)
+      result <- list(ref = codon_ref, 
+                     mut = codon_mut, 
+                     aa_ref = out_aa[1], 
+                     aa_mut = out_aa[2], 
+                     s = 1, n = 0)
     } else if (out_aa[1] != out_aa[2] ) {
-      result <- list(ref = codon_ref, mut = codon_mut, s = 0, n = 1)
+      result <- list(ref = codon_ref, 
+                     mut = codon_mut, 
+                     aa_ref = out_aa[1], 
+                     aa_mut = out_aa[2], 
+                     s = 0, n = 1)
     }
   return(result)
+  }
+
+compute_kaKs <- function(mutation_table) {
+  # ATG/M and TTG/W are unique, hence the divide by 0
+  mutation_table$sS <- mutation_table$s / mutation_table$S
+  mutation_table$sS[is.na(mutation_table$sS)] <- 0
+  mutation_table$nN <- mutation_table$n / mutation_table$N
+  kaks <- sum(mutation_table$nN) / sum(mutation_table$sS)
+  return(list(mutation_table, ka_ks = kaks))
 }
 
 #### test ----
+
+
 system.time({
 glou <-
   mut_counter("./data/core_gene_alignment_test.aln")
 })
 
-glou
-# rm(glou_2)
-# glou_2 <- mut_counter('data/rpoB_align_1l.aln')
-# glou_2
+
+
+rm(glou_2)
+glou_2 <- mut_counter('data/rpoB_align_1l.aln')
+View(glou_2[[1]])
+
