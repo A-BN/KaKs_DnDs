@@ -158,10 +158,10 @@ syn_or_nonsyn <-
 
 compute_kaKs <- function(mutation_table) {
   # ATG/M and TTG/W are unique, hence the divide by 0
-  mutation_table$sS <- mutation_table$s / mutation_table$S
+  mutation_table$sS <- mutation_table$s / (mutation_table$S * mutation_table$count)
   mutation_table$sS[is.na(mutation_table$sS)] <- 0
   mutation_table$nN <- mutation_table$n / mutation_table$N
-  kaks <- sum(mutation_table$nN) / sum(mutation_table$sS)
+  kaks <- sum(mutation_table$nN) / sum(mutation_table$sS * mutation_table$count)
   return(list(mutation_table, ka_ks = kaks))
 }
 
@@ -179,3 +179,4 @@ rm(glou_2)
 glou_2 <- mut_counter('data/rpoB_align_1l.aln')
 View(glou_2[[1]])
 
+glou_3 <- mut_counter(full_orf_aln = 'data/tetC.align')
