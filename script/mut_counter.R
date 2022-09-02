@@ -100,10 +100,13 @@ codon_counter <- function(ref, sn_table = SN_table) {
   codon_count_table <- data.frame(codon=unique(ref), count=0)
   for (i in 1:length(ref)) {
     codon.i <- ref[i]
-    codon_count_table$count[match(codon.i, codon_count_table$codon)] <- codon_count_table$count[match(codon.i, codon_count_table$codon)] + 1
+    codon_count_table$count[match(codon.i, codon_count_table$codon)] <- 
+      codon_count_table$count[match(codon.i, codon_count_table$codon)] + 1
   }
-  codon_count_table$S <- sn_table$S[match(codon_count_table$codon, sn_table$codon)]
-  codon_count_table$N <- sn_table$N[match(codon_count_table$codon, sn_table$codon)]
+  codon_count_table$S <- 
+    sn_table$S[match(codon_count_table$codon, sn_table$codon)]
+  codon_count_table$N <- 
+    sn_table$N[match(codon_count_table$codon, sn_table$codon)]
   return (codon_count_table)
 }
 
@@ -169,14 +172,19 @@ compute_kaKs <- function(mutation_table) {
 
 
 system.time({
-glou <-
+core_coli <-
   mut_counter("./data/core_gene_alignment_test.aln")
 })
 
+system.time({
+  core_coli_consensus <-
+    mut_counter("./data/core_gene_alignment_test_consensus.aln")
+})
 
 
-rm(glou_2)
-glou_2 <- mut_counter('data/rpoB_align_1l.aln')
-View(glou_2[[1]])
-
-glou_3 <- mut_counter(full_orf_aln = 'data/tetC.align')
+# 
+# rm(glou_2)
+# glou_2 <- mut_counter('data/rpoB_align_1l.aln')
+# View(glou_2[[1]])
+# 
+# glou_3 <- mut_counter(full_orf_aln = 'data/tetC.align')
