@@ -1,64 +1,104 @@
-mut_counter <- function(full_orf_aln, 
-                        genetic_code_path = './data/genetic_code.txt', 
-                        sn_table_path = './data/SN_codonTable.txt') {
+kaks <- function(full_orf_aln,
+                        genetic_code_path = './data/genetic_code.txt',
+                        sn_table_path = './data/SN_codonTable.txt',
+                        n_core = 1) 
+  {
   ### This function take blah blah blah
-  
-  # get number of lines of the input file
-  con <- full_orf_aln
-  n_lines <- length(readLines(con))
-  
+
   # Loading constant data tables
+  library(foreach)
+  library(doParallel)
   SN_table <- 
     read.table(file = sn_table_path, header = TRUE, sep = '\t')
   
   genetic_code <- 
     read.table(file = genetic_code_path, header = TRUE, sep = '\t')
+  # getting sequence names and indexes
+  all_comb <- comb_tab(full_orf_aln)
+  # Creating the output list
+  # output_list <-
+  # vector(mode = 'list', length = nrow(all_comb))
+  # my_clust <- makeCluster(spec = n_core, type = 'FORK')
+  # registerDoParallel(cl = my_clust, cores = n_core)
+  registerDoParallel(cores = n_core)
+  # for (i in 1:nrow(all_comb)) {
+  output_list <- 
+  foreach(i = 1:nrow(all_comb)) %dopar% {
+    seq_names <- 
+      c(all_comb$seq_1[i], all_comb$seq_2[i])
+    seq_index <- 
+      c(all_comb$index_1[i], all_comb$index_2[i])
+    # Checking current names and indexes    
+  if (seq_names[1] == seq_names[2]) {
+    stop('Identical sequences names !')
+  }
+  if (seq_index[1] == seq_index[2]) {
+    stop('Identical sequences names !')
+  }
+  
+  if (length(seq_names) < 2 || length(seq_index) < 2) {
+    stop('Not enough sequence indexes or name')
+  }
+  
+  if (length(seq_names) > 2 || length(seq_index) > 2) {
+    message('Too many sequence indexes or name !')
+    message('Only the first two will be used')
+  }
 
   # creating empty output table
   mut_table <- genetic_code
+  mut_table$seq_1 <- seq_names[1] # as.factor(seq_names[1])
+  mut_table$seq_2 <- seq_names[2] # as.factor(seq_names[2])
   mut_table$s <- 0
   mut_table$n <- 0
   
+  cat('Step', i, '/', nrow(all_comb),'\n')
+  cat('Computing sequence', seq_names[1],' vs ', seq_names[2], '\n')
+  
   # reading first sequence as a reference
-  message("Analyzing the first sequence as a reference.")
-  to_skip <- 1 # in order to read lines one by one
+  
   ref <- 
-    read_codons(file = full_orf_aln, n = 1, skip = to_skip)
+    read_codons(file = full_orf_aln, n = 1, to_skip = seq_index[1])
   # counting codons in REF
   ref_count <- codon_counter(ref, sn_table = SN_table)
+  # reading the second sequences
   
-  # reading the following sequences
-  message("Analyzing the following sequences")
-  while(to_skip < (n_lines - 1)) {
-  to_skip <- to_skip + 2
-  cat('- sequence number:', to_skip %/% 2, '\n')
   curr_seq <- 
-    read_codons(file = full_orf_aln, n = 1, skip = to_skip)
+    read_codons(file = full_orf_aln, n = 1, to_skip = seq_index[2])
   # finding mismatches positions
   curr_mismatches <- 
     find_mismatches(seq_1 = ref, seq_2 = curr_seq)
   
   if (length(curr_mismatches) == 0) {
-    next()
+    cat('The sequences', seq_names[1],' and ', seq_names[2], ' are identical !\n')
+    return(NA)
   }
-  for (i in 1:length(curr_mismatches)) {
+  
+  for (j in 1:length(curr_mismatches)) {
     # print(ref[curr_mismatches[i]])
     # print(curr_seq[curr_mismatches[i]])
-    curr_mut <- syn_or_nonsyn(codon_ref = ref[curr_mismatches[i]], 
-                  codon_mut = curr_seq[curr_mismatches[i]], 
+    curr_mut <- syn_or_nonsyn(codon_ref = ref[curr_mismatches[j]], 
+                  codon_mut = curr_seq[curr_mismatches[j]], 
                   gen_code = genetic_code)
     mut_table$s[mut_table$codon == curr_mut$ref[1]] <- 
       mut_table$s[mut_table$codon == curr_mut$ref[1]] + curr_mut$s[1]   
     mut_table$n[mut_table$codon == curr_mut$ref[1]] <- 
      mut_table$n[mut_table$codon == curr_mut$ref[1]] + curr_mut$n[1]              
   }
-}
   mut_table <- merge(ref_count, mut_table, by = 'codon')
-  full_output <- compute_kaKs(mutation_table = mut_table)
-  order_wanted <- c('codon', 'AA','count', 'S', 'N', 's', 'n', 'sS', 'nN')
-  full_output[[1]] <- full_output[[1]][ , order_wanted]
-  cat('Ka/Ks is', round(full_output[[2]], 3),'\n')
-  return(full_output)
+  curr_output <- compute_kaKs(mutation_table = mut_table)
+  order_wanted <- c('seq_1', 'seq_2','codon', 'AA','count', 'S', 'N', 's', 'n', 'Ks', 'Ka')
+  curr_output <- curr_output[ , order_wanted]
+  # cat('Ka/Ks is', round(curr_output[[2]], 3),'\n')
+  cat('\n...\n\n')
+  return(curr_output) # to get the result into output_list
+  }
+  
+  output_df <- do.call(what = rbind, output_list)
+  output_df <- output_df[complete.cases(output_df), ]
+  kaks_df <- final_KaKs(df = output_df)
+  
+  return(list(output_df, kaks_df))
 }
 
 
@@ -81,9 +121,28 @@ n.readLines <- function(fn,n,comment="#", skip=0, header=FALSE)
   return(test.bit)
 }
 
-read_codons <- function(file, n = 1,skip) {
+comb_tab <- function(full_orf_aln) {
+  n_lines <- length(readLines(full_orf_aln))
+  seq.names <- integer(0)
+  for (i in seq(0,(n_lines-1),2)) {
+    seq.names <- c(seq.names, n.readLines(full_orf_aln, n=1, skip=i))
+  }
+  seq.names <- gsub(">", "", seq.names) 		
+  
+  index.combn <- combn(seq(1,n_lines,2),2)
+  seq.combn <- combn(seq.names,2)
+  
+  result <- data.frame(cbind(t(seq.combn), t(index.combn)))
+  
+  colnames(result) <- c("seq_1", "seq_2", "index_1", "index_2")
+  result$index_1 <- as.integer(result$index_1)
+  result$index_2 <- as.integer(result$index_2)
+  return(result)
+}
+
+read_codons <- function(file, n = 1, to_skip) {
   codons <- 
-    n.readLines(fn = file, n = n, skip = skip, header = FALSE)
+    n.readLines(fn = file, n = n, skip = to_skip, header = FALSE)
   codons <- toupper(codons)
   # if (grepl(pattern = '[^ATGC]', x = codons)) {
   #   stop('ARGH ! INVALID NUCLEOTIDES, WE ARE DOOOOOMED')
@@ -161,30 +220,34 @@ syn_or_nonsyn <-
 
 compute_kaKs <- function(mutation_table) {
   # ATG/M and TTG/W are unique, hence the divide by 0
-  mutation_table$sS <- mutation_table$s / (mutation_table$S * mutation_table$count)
-  mutation_table$sS[is.na(mutation_table$sS)] <- 0
-  mutation_table$nN <- mutation_table$n / mutation_table$N
-  kaks <- sum(mutation_table$nN) / sum(mutation_table$sS * mutation_table$count)
-  return(list(mutation_table, ka_ks = kaks))
+  mutation_table$Ks <- mutation_table$s / (mutation_table$S * mutation_table$count)
+  mutation_table$Ks[is.na(mutation_table$Ks)] <- 0
+  mutation_table$Ka <- mutation_table$n / (mutation_table$N * mutation_table$count)
+  if (sum(mutation_table$Ks) == 0) {
+    cat('No synonymous mutation detected !\n')
+  }
+  # mutation_table$KaKs <- 
+  #   sum(mutation_table$Ka) / sum(mutation_table$Ks)
+  # return(list(mutation_table, ka_ks = kaks))
+  return(mutation_table)
 }
 
-#### test ----
-
-
-system.time({
-core_coli <-
-  mut_counter("./data/core_gene_alignment_test.aln")
-})
-
-system.time({
-  core_coli_consensus <-
-    mut_counter("./data/core_gene_alignment_test_consensus.aln")
-})
-
-
-# 
-# rm(glou_2)
-# glou_2 <- mut_counter('data/rpoB_align_1l.aln')
-# View(glou_2[[1]])
-# 
-# glou_3 <- mut_counter(full_orf_aln = 'data/tetC.align')
+final_KaKs <- function(df) {
+  df$id <- 
+      paste0(df$seq_1, df$seq_2)
+  uni_id <- 
+    unique(df$id)
+  n_uni <- length(uni_id)
+  out_df <- data.frame(seq_1 = rep(NA, n_uni), 
+                       seq_2 = rep(NA, n_uni), 
+                       KaKs = rep(NA, n_uni))
+  for (i in 1:n_uni) {
+    curr_df <- 
+      df[df$id == uni_id[i], ]
+    
+    out_df$seq_1[i] <- curr_df$seq_1[1]
+    out_df$seq_2[i] <- curr_df$seq_2[1]
+    out_df$KaKs[i] <-  sum(curr_df$Ka) / sum(curr_df$Ks)
+  }
+  return(out_df)
+}
